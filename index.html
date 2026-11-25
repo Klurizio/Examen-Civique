@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Examen civique : entraînement</title>
+<style>
+:root{--bleu:#000091;--rouge:#c9191e;--vert:#18753c}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f5fe;color:#161616;line-height:1.5}
+main{max-width:760px;margin:auto;padding:16px}
+.carte{background:#fff;border:1px solid #ddd;border-radius:8px;padding:16px;margin:14px 0}
+h1{color:var(--bleu)}fieldset{border:1px solid #ddd}legend{font-weight:600;padding:0 6px}
+label{display:block;padding:10px;border:1px solid #ddd;border-radius:6px;margin:6px 0;cursor:pointer}
+label:has(:checked){border-color:var(--bleu);background:#ececfe}
+button{background:var(--bleu);color:#fff;border:0;border-radius:6px;padding:12px 22px;font-size:1rem;cursor:pointer}
+#barre{position:sticky;top:0;background:var(--bleu);color:#fff;padding:10px;text-align:center;font-weight:700}
+#barre.urgent{background:var(--rouge)}
+.zh{color:#555;display:block}.ok{border:2px solid var(--vert);background:#e8f7ee}.ko{border:2px solid var(--rouge);background:#fdeced}
+li{list-style:none;padding:8px;margin:5px 0;border-radius:6px}ul{padding:0}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div id="barre" hidden></div>
+<main>
+<section id="accueil">
+<h1>Examen civique : QCM d'entraînement</h1>
+<div class="carte">
+<p>40 questions tirées au hasard (28 de connaissance et 12 mises en situation), 4 réponses, 1 seule bonne. Durée : 45 minutes. Réussite : 32/40.</p>
+<p>À la fin : corrigé avec traduction en chinois simplifié.<span class="zh" lang="zh-CN">考试结束后显示答案解析及简体中文翻译。</span></p>
+<p><small>Niveau : carte de séjour pluriannuelle (CSP). Site d'entraînement non officiel. Les réponses, les traductions et les mises en situation ne viennent pas du ministère.</small></p>
+<button id="demarrer">Commencer l'examen</button>
+</div>
+</section>
+<form id="examen" hidden><div id="questions"></div><button>Terminer et voir le corrigé</button></form>
+<section id="resultat" hidden></section>
+</main>
+<script src="questions.js"></script>
+<script>
+const DUREE = 45*60*1000;
+// Nombre de questions par thème : [connaissance, situation]
+const REPARTITION = {1:[5,6],2:[6,0],3:[5,6],4:[8,0],5:[4,0]};
+const $ = id => document.getElementById(id);
+let sujet = [], fin = 0, horloge = null;
+
+function melanger(t){const a=[...t];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function el(nom,texte,classe){const e=document.createElement(nom);if(texte!==undefined)e.textContent=texte;if(classe)e.className=classe;return e}
+
+function tirer(){
+  const s=[];
+  for(const [t,[c,m]] of Object.entries(REPARTITION))
+    for(const [type,n] of [["C",c],["S",m]])
+      s.push(...melanger(QUESTIONS.filter(q=>q.t==t&&q.y===type)).slice(0,n));
+  return melanger(s).map(q=>({q:q.q,reponses:melanger(q.a.map((txt,i)=>({txt,bonne:i===0})))}));
+}
+
+function demarrer(){
+  sujet=tirer();
+  $("questions").replaceChildren(...sujet.map((q,i)=>{
+    const f=el("fieldset",undefined,"carte");
+    f.append(el("legend",`Question ${i+1} / ${sujet.length}`),el("p",q.q[0]));
+    q.reponses.forEach((r,j)=>{
+      const l=el("label"),inp=el("input");inp.type="radio";inp.name="q"+i;inp.value=j;
+      l.append(inp," "+r.txt[0]);f.append(l);
+    });
+    return f;
+  }));
+  $("accueil").hidden=$("resultat").hidden=true;
+  $("examen").hidden=$("barre").hidden=false;
+  fin=Date.now()+DUREE;tic();horloge=setInterval(tic,500);scrollTo(0,0);
+}
+
+// Basé sur l'heure de fin : reste exact même si l'onglet est en arrière-plan.
+function tic(){
+  const s=Math.max(0,Math.ceil((fin-Date.now())/1000));
+  const repondu=document.querySelectorAll("#questions input:checked").length;
+  $("barre").textContent=`⏱ ${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}  —  ${repondu}/${sujet.length} répondues`;
+  $("barre").classList.toggle("urgent",s<=300);
+  if(s===0)terminer();
+}
+
+function terminer(){
+  clearInterval(horloge);
+  let score=0;
+  const cartes=sujet.map((q,i)=>{
+    const coche=document.querySelector(`input[name=q${i}]:checked`);
+    const choix=coche?Number(coche.value):-1;
+    const juste=choix>=0&&q.reponses[choix].bonne;if(juste)score++;
+    const d=el("div",undefined,"carte"),titre=el("p"),zh=el("span",q.q[1],"zh");zh.lang="zh-CN";
+    titre.append(el("strong",`${i+1}. ${q.q[0]}`),zh);
+    const ul=el("ul");
+    q.reponses.forEach((r,j)=>{
+      let marque="",classe="";
+      if(r.bonne){marque="✅ ";classe="ok"}else if(j===choix){marque="❌ ";classe="ko"}
+      const li=el("li",marque+r.txt[0]+(j===choix?" (votre réponse / 你的答案)":""),classe),t=el("span",r.txt[1],"zh");t.lang="zh-CN";li.append(t);ul.append(li);
+    });
+    d.append(titre,el("p",juste?"Correct / 正确":choix<0?"Sans réponse / 未作答":"Incorrect / 错误"),ul);
+    return d;
+  });
+  const bilan=el("div",undefined,"carte");
+  bilan.append(el("h1",`Score : ${score} / ${sujet.length}`),el("p",score>=32?"Réussi ! 通过！":"Non réussi (32/40 requis). 未通过（需答对32题）。"));
+  const b=el("button","Nouveau QCM aléatoire");b.onclick=demarrer;bilan.append(b);
+  $("resultat").replaceChildren(bilan,...cartes);
+  $("examen").hidden=$("barre").hidden=true;$("resultat").hidden=false;scrollTo(0,0);
+}
+
+$("demarrer").onclick=demarrer;
+$("examen").onsubmit=e=>{e.preventDefault();if(confirm("Terminer l'examen ?"))terminer()};
+addEventListener("beforeunload",e=>{if(!$("examen").hidden)e.preventDefault()});
+</script>
+</body>
+</html>
