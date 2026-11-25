@@ -16,9 +16,14 @@ button{background:var(--bleu);color:#fff;border:0;border-radius:6px;padding:12px
 #barre.urgent{background:var(--rouge)}
 .zh{color:#555;display:block}.ok{border:2px solid var(--vert);background:#e8f7ee}.ko{border:2px solid var(--rouge);background:#fdeced}
 li{list-style:none;padding:8px;margin:5px 0;border-radius:6px}ul{padding:0}[hidden]{display:none!important}
+nav{display:flex;gap:6px;max-width:760px;margin:auto;padding:12px 16px 0}nav button{flex:1;padding:10px 4px;background:#fff;color:var(--bleu);border:1px solid var(--bleu)}
+nav button[aria-current=page]{background:var(--bleu);color:#fff}select,input[type=search]{width:100%;padding:10px;font-size:1rem;margin:5px 0}
+.expl{background:#fff8e1;border-left:4px solid #d9a400;padding:8px 12px}.options button{display:block;width:100%;text-align:left;background:#fff;color:#161616;border:1px solid #ddd;margin:6px 0;padding:10px}
+.options button.ok{border:2px solid var(--vert);background:#e8f7ee}.options button.ko{border:2px solid var(--rouge);background:#fdeced}.options button:disabled{cursor:default}summary{cursor:pointer;font-weight:600}
 </style>
 </head>
 <body>
+<nav id="menu"><button data-page="accueil" aria-current="page">Examen 考试</button><button data-page="entrainement">Entraînement 练习</button><button data-page="cours">Cours 课程</button></nav>
 <div id="barre" hidden></div>
 <main>
 <section id="accueil">
@@ -32,6 +37,17 @@ li{list-style:none;padding:8px;margin:5px 0;border-radius:6px}ul{padding:0}[hidd
 </section>
 <form id="examen" hidden><div id="questions"></div><button>Terminer et voir le corrigé</button></form>
 <section id="resultat" hidden></section>
+<section id="entrainement" hidden>
+<h1>Entraînement <span lang="zh-CN">练习</span></h1>
+<div class="carte"><label for="themeE" style="border:0;padding:0">Thème / 主题</label><select id="themeE"></select><p id="suivi" aria-live="polite"></p></div>
+<div id="exercice"></div>
+</section>
+<section id="cours" hidden>
+<h1>Cours <span lang="zh-CN">课程</span></h1>
+<div class="carte"><select id="themeC" aria-label="Thème du cours"></select><input type="search" id="recherche" placeholder="Rechercher / 搜索" aria-label="Rechercher dans le cours"><p id="compte"></p>
+<p><small>Explications non officielles, à vérifier avec les fiches du <a href="https://formation-civique.interieur.gouv.fr/" target="_blank" rel="noopener">site Formation civique</a>.<span class="zh" lang="zh-CN">以下解释并非官方内容，请对照官方网站核实。</span></small></p></div>
+<div id="lecons"></div>
+</section>
 </main>
 <script src="questions.js"></script>
 <script>
@@ -63,7 +79,7 @@ function demarrer(){
     });
     return f;
   }));
-  $("accueil").hidden=$("resultat").hidden=true;
+  $("accueil").hidden=$("resultat").hidden=$("menu").hidden=true;
   $("examen").hidden=$("barre").hidden=false;
   fin=Date.now()+DUREE;tic();horloge=setInterval(tic,500);scrollTo(0,0);
 }
@@ -92,15 +108,76 @@ function terminer(){
       if(r.bonne){marque="✅ ";classe="ok"}else if(j===choix){marque="❌ ";classe="ko"}
       const li=el("li",marque+r.txt[0]+(j===choix?" (votre réponse / 你的答案)":""),classe),t=el("span",r.txt[1],"zh");t.lang="zh-CN";li.append(t);ul.append(li);
     });
-    d.append(titre,el("p",juste?"Correct / 正确":choix<0?"Sans réponse / 未作答":"Incorrect / 错误"),ul);
+    d.append(titre,el("p",juste?"Correct / 正确":choix<0?"Sans réponse / 未作答":"Incorrect / 错误"),ul,explication(QUESTIONS.find(x=>x.q[0]===q.q[0])));
     return d;
   });
   const bilan=el("div",undefined,"carte");
   bilan.append(el("h1",`Score : ${score} / ${sujet.length}`),el("p",score>=32?"Réussi ! 通过！":"Non réussi (32/40 requis). 未通过（需答对32题）。"));
   const b=el("button","Nouveau QCM aléatoire");b.onclick=demarrer;bilan.append(b);
   $("resultat").replaceChildren(bilan,...cartes);
-  $("examen").hidden=$("barre").hidden=true;$("resultat").hidden=false;scrollTo(0,0);
+  $("examen").hidden=$("barre").hidden=true;$("resultat").hidden=$("menu").hidden=false;scrollTo(0,0);
 }
+
+// ===== Navigation (le menu est masqué pendant l'examen) =====
+function afficher(page){
+  for(const id of ["accueil","entrainement","cours","resultat"])$(id).hidden=id!==page;
+  document.querySelectorAll("#menu button").forEach(b=>b.dataset.page===page?b.setAttribute("aria-current","page"):b.removeAttribute("aria-current"));
+  scrollTo(0,0);
+}
+document.querySelectorAll("#menu button").forEach(b=>b.onclick=()=>afficher(b.dataset.page));
+
+const THEMES={1:["Principes et valeurs de la République","共和国的原则与价值观"],2:["Système institutionnel et politique","制度与政治体系"],3:["Droits et devoirs","权利与义务"],4:["Histoire, géographie et culture","历史、地理与文化"],5:["Vivre dans la société française","在法国社会生活"]};
+for(const id of ["themeE","themeC"]){
+  $(id).add(new Option("Tous les thèmes / 全部主题","0"));
+  for(const [n,[fr,zh]] of Object.entries(THEMES))$(id).add(new Option(`${fr} / ${zh}`,n));
+}
+const duTheme=t=>QUESTIONS.filter(q=>t==="0"||String(q.t)===t);
+function bilingue(nom,[fr,zh],classe){const e=el(nom,fr,classe),s=el("span",zh,"zh");s.lang="zh-CN";e.append(s);return e}
+const explication=q=>bilingue("p",q.e,"expl");
+
+// ===== Entraînement =====
+let pile=[],rang=0,justes=0;
+function lancerEntrainement(){pile=melanger(duTheme($("themeE").value));rang=justes=0;montrer()}
+function montrer(){
+  const zone=$("exercice");
+  if(rang>=pile.length){
+    const fini=el("div",undefined,"carte"),b=el("button","Recommencer / 重新开始");b.onclick=lancerEntrainement;
+    fini.append(el("h2",`Terminé / 完成 : ${justes} / ${pile.length}`),b);zone.replaceChildren(fini);$("suivi").textContent="";return;
+  }
+  const q=pile[rang],d=el("div",undefined,"carte"),options=el("div",undefined,"options"),retour=el("div");retour.setAttribute("aria-live","polite");
+  $("suivi").textContent=`Question ${rang+1} / ${pile.length} — ${justes} bonne(s) réponse(s)`;
+  const reponses=melanger(q.a.map((txt,i)=>({txt,bonne:i===0})));
+  reponses.forEach(r=>{
+    const b=bilingue("button",r.txt);b.type="button";
+    b.onclick=()=>{
+      if(r.bonne)justes++;
+      [...options.children].forEach((autre,k)=>{autre.disabled=true;if(reponses[k].bonne){autre.classList.add("ok");autre.prepend("✅ ")}});
+      if(!r.bonne){b.classList.add("ko");b.prepend("❌ ")}
+      const suite=el("button","Suivant / 下一题");suite.onclick=()=>{rang++;montrer();$("entrainement").scrollIntoView()};
+      retour.append(el("p",r.bonne?"Bonne réponse ! 回答正确！":"Mauvaise réponse. 回答错误。"),explication(q),suite);
+      $("suivi").textContent=`Question ${rang+1} / ${pile.length} — ${justes} bonne(s) réponse(s)`;
+    };
+    options.append(b);
+  });
+  d.append(bilingue("h2",q.q),options,retour);zone.replaceChildren(d);
+}
+$("themeE").onchange=lancerEntrainement;
+
+// ===== Cours =====
+const simple=s=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/’/g,"'");
+function montrerCours(){
+  const mot=simple($("recherche").value.trim());
+  const liste=duTheme($("themeC").value).filter(q=>!mot||simple([...q.q,...q.a[0],...q.e].join(" ")).includes(mot));
+  $("compte").textContent=`${liste.length} fiche(s)`;
+  $("lecons").replaceChildren(...liste.map(q=>{
+    const d=el("details",undefined,"carte"),titre=bilingue("summary",q.q);
+    if(q.y==="S")titre.prepend("[Mise en situation] ");
+    d.append(titre,el("h3","Réponse / 答案"),bilingue("p",q.a[0],"ok carte"),el("h3","Explication / 解释"),explication(q));
+    return d;
+  }));
+}
+$("themeC").onchange=$("recherche").oninput=montrerCours;
+lancerEntrainement();montrerCours();
 
 $("demarrer").onclick=demarrer;
 $("examen").onsubmit=e=>{e.preventDefault();if(confirm("Terminer l'examen ?"))terminer()};
